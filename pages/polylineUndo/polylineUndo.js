@@ -1,3 +1,4 @@
+
 import Stack from './stack';
 import Konva from "konva";
 import { createMachine, interpret } from "xstate";
@@ -17,6 +18,56 @@ stage.add(temporaire);
 
 const MAX_POINTS = 10;
 let polyline // La polyline en cours de construction;
+
+class UndoManager{
+   
+    constructor(){
+        this.undoStack= new Stack();
+        this.redoStack = new Stack();
+    }
+    
+    execute(command){
+        command.execute();
+        this.undoStack.push(command);
+    };
+    canUndo(){
+        return !this.undoStack.isEmpty();
+    };
+    canRedo(){
+        return !this.redoStack.isEmpty();
+    };
+    undo(){
+        if(this.canUndo()){
+            let command = this.undoStack.pop();
+            command.undo();
+            this.redoStack.push(command)
+        }
+    };
+    redo(){
+        if(this.canRedo()){
+            let command = this.redoStack.pop();
+            command.execute();
+            this.undoStack.push(command)
+        }
+    }
+}
+
+class Command{
+    execute(){};
+    undo(){}
+}
+
+class ConcreteCommand extends Command{
+    constructor(line,dessin){
+        super();
+        this.line = line;
+        this.dessin = dessin
+    }
+    execute(){this.dessin.add(this.line)};
+    undo(){this.line.remove()}
+}
+
+const undoManager = new UndoManager()
 
 const polylineMachine = createMachine(
     {
@@ -119,7 +170,9 @@ const polylineMachine = createMachine(
                 polyline.points(newPoints);
                 polyline.stroke("black"); // On change la couleur
                 // On sauvegarde la polyline dans la couche de dessin
-                dessin.add(polyline); // On l'ajoute à la couche de dessin
+                //dessin.add(polyline); // On l'ajoute à la couche de dessin
+                let command = new ConcreteCommand(polyline,dessin)
+                undoManager.execute(command)
             },
             addPoint: (context, event) => {
                 const pos = stage.getPointerPosition();
@@ -170,4 +223,11 @@ stage.on("mousemove", () => {
 window.addEventListener("keydown", (event) => {
     console.log("Key pressed:", event.key);
     polylineService.send(event.key);
+    if(event.key =="u"){
+        undoManager.undo()
+    }
+    if(event.key == "r"){
+        undoManager.redo()
+    }
 });
+
